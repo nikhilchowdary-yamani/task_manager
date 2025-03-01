@@ -11,32 +11,30 @@ class _TaskListScreenState extends State<TaskListScreen> {
   final TextEditingController taskController = TextEditingController();
   String selectedPriority = "Medium";
 
-  // Function to add a task and sort the list
+
   void addTask() {
     if (taskController.text.isNotEmpty) {
       setState(() {
         tasks.add(Task(name: taskController.text, priority: selectedPriority));
         taskController.clear();
-        sortTasks(); // Sort after adding a task
+        sortTasks(); 
       });
     }
   }
 
-  // Function to toggle task completion status
+ 
   void toggleTaskCompletion(int index) {
     setState(() {
       tasks[index].isCompleted = !tasks[index].isCompleted;
     });
   }
 
-  // Function to delete a task
   void deleteTask(int index) {
     setState(() {
       tasks.removeAt(index);
     });
   }
 
-  // Function to sort tasks by priority
   void sortTasks() {
     const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
     tasks.sort((a, b) => priorityOrder[a.priority]!.compareTo(priorityOrder[b.priority]!));
