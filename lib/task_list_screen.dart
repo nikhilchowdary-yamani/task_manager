@@ -11,6 +11,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   final TextEditingController taskController = TextEditingController();
   String selectedPriority = "Medium";
 
+  // Function to add a task to the list
   void addTask() {
     if (taskController.text.isNotEmpty) {
       setState(() {
@@ -18,6 +19,20 @@ class _TaskListScreenState extends State<TaskListScreen> {
         taskController.clear();
       });
     }
+  }
+
+  // Function to toggle task completion status
+  void toggleTaskCompletion(int index) {
+    setState(() {
+      tasks[index].isCompleted = !tasks[index].isCompleted;
+    });
+  }
+
+  // Function to delete a task
+  void deleteTask(int index) {
+    setState(() {
+      tasks.removeAt(index);
+    });
   }
 
   @override
@@ -59,7 +74,27 @@ class _TaskListScreenState extends State<TaskListScreen> {
               itemCount: tasks.length,
               itemBuilder: (context, index) {
                 return ListTile(
-                  title: Text(tasks[index].name),
+                  leading: Checkbox(
+                    value: tasks[index].isCompleted,
+                    onChanged: (bool? value) {
+                      toggleTaskCompletion(index);
+                    },
+                  ),
+                  title: Text(
+                    tasks[index].name,
+                    style: TextStyle(
+                      decoration: tasks[index].isCompleted
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                  subtitle: Text("Priority: ${tasks[index].priority}"),
+                  trailing: IconButton(
+                    icon: Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      deleteTask(index);
+                    },
+                  ),
                 );
               },
             ),
