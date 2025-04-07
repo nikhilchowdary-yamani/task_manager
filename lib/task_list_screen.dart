@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'task.dart';
+import '../task.dart';
 
 class TaskListScreen extends StatefulWidget {
   @override
@@ -7,105 +7,103 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
-  final List<Task> tasks = [];
-  final TextEditingController taskController = TextEditingController();
-  String selectedPriority = "Medium";
-
-
-  void addTask() {
-    if (taskController.text.isNotEmpty) {
-      setState(() {
-        tasks.add(Task(name: taskController.text, priority: selectedPriority));
-        taskController.clear();
-        sortTasks(); 
-      });
-    }
-  }
-
- 
-  void toggleTaskCompletion(int index) {
-    setState(() {
-      tasks[index].isCompleted = !tasks[index].isCompleted;
-    });
-  }
-
-  void deleteTask(int index) {
-    setState(() {
-      tasks.removeAt(index);
-    });
-  }
-
-  void sortTasks() {
-    const priorityOrder = {"High": 0, "Medium": 1, "Low": 2};
-    tasks.sort((a, b) => priorityOrder[a.priority]!.compareTo(priorityOrder[b.priority]!));
-  }
+  // Sample nested data for schedules
+  List<DaySchedule> daySchedules = [
+    DaySchedule(
+      day: 'Monday',
+      timeSlots: [
+        TimeSlot(
+          timeRange: '9 am - 10 am',
+          tasks: [
+            Task(name: 'HW1', isCompleted: false, priority: 'High'),
+            Task(name: 'Essay2', isCompleted: false, priority: 'Medium'),
+          ],
+        ),
+        TimeSlot(
+          timeRange: '12 pm - 2 pm',
+          tasks: [
+            Task(name: 'Review notes', isCompleted: false, priority: 'Low'),
+            Task(name: 'Prepare presentation', isCompleted: false, priority: 'High'),
+          ],
+        ),
+      ],
+    ),
+    DaySchedule(
+      day: 'Tuesday',
+      timeSlots: [
+        TimeSlot(
+          timeRange: '10 am - 11 am',
+          tasks: [
+            Task(name: 'Team meeting', isCompleted: false, priority: 'High'),
+          ],
+        ),
+      ],
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("To-Do List")),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: taskController,
-                    decoration: InputDecoration(labelText: "Enter Task"),
-                  ),
-                ),
-                DropdownButton<String>(
-                  value: selectedPriority,
-                  items: ["Low", "Medium", "High"]
-                      .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedPriority = value!;
-                    });
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.add),
-                  onPressed: addTask,
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: tasks.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  leading: Checkbox(
-                    value: tasks[index].isCompleted,
-                    onChanged: (bool? value) {
-                      toggleTaskCompletion(index);
-                    },
-                  ),
-                  title: Text(
-                    tasks[index].name,
-                    style: TextStyle(
-                      decoration: tasks[index].isCompleted
-                          ? TextDecoration.lineThrough
+      appBar: AppBar(
+        title: Text('Task List with Schedule'),
+      ),
+      body: ListView.builder(
+        itemCount: daySchedules.length,
+        itemBuilder: (context, dayIndex) {
+          final daySchedule = daySchedules[dayIndex];
+          return ExpansionTile(
+            title: Text(daySchedule.day),
+            children: daySchedule.timeSlots.map((timeSlot) {
+              return ExpansionTile(
+                title: Text(timeSlot.timeRange),
+                children: timeSlot.tasks.map((task) {
+                  return ListTile(
+                    leading: Checkbox(
+                      value: task.isCompleted,
+                      onChanged: (bool? value) {
+                        setState(() {
+                          task.isCompleted = value ?? false;
+                        });
+                      },
+                    ),
+                    title: Text(
+                      task.name,
+                      style: task.isCompleted
+                          ? TextStyle(decoration: TextDecoration.lineThrough)
                           : null,
                     ),
-                  ),
-                  subtitle: Text("Priority: ${tasks[index].priority}"),
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      deleteTask(index);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+                    subtitle: Text('Priority: ${task.priority}'),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete),
+                      onPressed: () {
+                        setState(() {
+                          timeSlot.tasks.remove(task);
+                        });
+                      },
+                    ),
+                  );
+                }).toList(),
+              );
+            }).toList(),
+          );
+        },
       ),
     );
   }
+}
+
+// Helper model class to represent a time slot and its associated tasks.
+class TimeSlot {
+  String timeRange;
+  List<Task> tasks;
+
+  TimeSlot({required this.timeRange, required this.tasks});
+}
+
+// Helper model class to represent a day's schedule.
+class DaySchedule {
+  String day;
+  List<TimeSlot> timeSlots;
+
+  DaySchedule({required this.day, required this.timeSlots});
 }
