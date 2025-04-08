@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../task.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'task.dart';
 
 class TaskListScreen extends StatefulWidget {
   @override
@@ -7,80 +8,86 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
-  // Sample nested data for schedules
-  List<DaySchedule> daySchedules = [
-    DaySchedule(
-      day: 'Monday',
-      timeSlots: [
-        TimeSlot(
-          timeRange: '9 am - 10 am',
-          tasks: [
-            Task(name: 'HW1', isCompleted: false, priority: 'High'),
-            Task(name: 'Essay2', isCompleted: false, priority: 'Medium'),
-          ],
-        ),
-        TimeSlot(
-          timeRange: '12 pm - 2 pm',
-          tasks: [
-            Task(name: 'Review notes', isCompleted: false, priority: 'Low'),
-            Task(name: 'Prepare presentation', isCompleted: false, priority: 'High'),
-          ],
-        ),
-      ],
-    ),
-    DaySchedule(
-      day: 'Tuesday',
-      timeSlots: [
-        TimeSlot(
-          timeRange: '10 am - 11 am',
-          tasks: [
-            Task(name: 'Team meeting', isCompleted: false, priority: 'High'),
-          ],
-        ),
-      ],
-    ),
-  ];
+  // Toggle the completed state for a task in Firestore.
+  void _toggleTaskCompletion(Task task, bool? newValue) {
+    if (newValue == null) return;
+    FirebaseFirestore.instance
+        .collection('tasks')
+        .doc(task.id)
+        .update({'isCompleted': newValue});
+  }
+
+  // Delete a task from Firestore.
+  void _deleteTask(Task task) {
+    FirebaseFirestore.instance.collection('tasks').doc(task.id).delete();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Task List with Schedule'),
+        title: Text('Real-time Task List with Firebase'),
       ),
-      body: ListView.builder(
-        itemCount: daySchedules.length,
-        itemBuilder: (context, dayIndex) {
-          final daySchedule = daySchedules[dayIndex];
-          return ExpansionTile(
-            title: Text(daySchedule.day),
-            children: daySchedule.timeSlots.map((timeSlot) {
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('tasks').snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return Center(child: CircularProgressIndicator());
+
+          // Convert each document into a Task object.
+          List<Task> tasks = snapshot.data!.docs.map((doc) {
+            return Task.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+          }).toList();
+
+          // Group tasks by day and then by time range.
+          Map<String, Map<String, List<Task>>> groupedTasks = {};
+          for (var task in tasks) {
+            // Group by day.
+            if (!groupedTasks.containsKey(task.day)) {
+              groupedTasks[task.day] = {};
+            }
+            // Group by time range within the day.
+            if (!groupedTasks[task.day]!.containsKey(task.timeRange)) {
+              groupedTasks[task.day]![task.timeRange] = [];
+            }
+            groupedTasks[task.day]![task.timeRange]!.add(task);
+          }
+
+          // Build the list view. Each day is an ExpansionTile containing time slots.
+          return ListView(
+            children: groupedTasks.entries.map((dayEntry) {
+              String day = dayEntry.key;
+              Map<String, List<Task>> timeSlots = dayEntry.value;
               return ExpansionTile(
-                title: Text(timeSlot.timeRange),
-                children: timeSlot.tasks.map((task) {
-                  return ListTile(
-                    leading: Checkbox(
-                      value: task.isCompleted,
-                      onChanged: (bool? value) {
-                        setState(() {
-                          task.isCompleted = value ?? false;
-                        });
-                      },
-                    ),
-                    title: Text(
-                      task.name,
-                      style: task.isCompleted
-                          ? TextStyle(decoration: TextDecoration.lineThrough)
-                          : null,
-                    ),
-                    subtitle: Text('Priority: ${task.priority}'),
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete),
-                      onPressed: () {
-                        setState(() {
-                          timeSlot.tasks.remove(task);
-                        });
-                      },
-                    ),
+                title: Text(day),
+                children: timeSlots.entries.map((timeSlotEntry) {
+                  String timeRange = timeSlotEntry.key;
+                  List<Task> tasksForTimeRange = timeSlotEntry.value;
+                  return ExpansionTile(
+                    title: Text(timeRange),
+                    children: tasksForTimeRange.map((task) {
+                      return ListTile(
+                        leading: Checkbox(
+                          value: task.isCompleted,
+                          onChanged: (bool? newValue) {
+                            _toggleTaskCompletion(task, newValue);
+                          },
+                        ),
+                        title: Text(
+                          task.name,
+                          style: task.isCompleted
+                              ? TextStyle(decoration: TextDecoration.lineThrough)
+                              : null,
+                        ),
+                        subtitle: Text('Priority: ${task.priority}'),
+                        trailing: IconButton(
+                          icon: Icon(Icons.delete),
+                          onPressed: () {
+                            _deleteTask(task);
+                          },
+                        ),
+                      );
+                    }).toList(),
                   );
                 }).toList(),
               );
@@ -88,22 +95,93 @@ class _TaskListScreenState extends State<TaskListScreen> {
           );
         },
       ),
+      // Floating action button to add a new task.
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.add),
+        onPressed: () async {
+          // Show a dialog to collect new task details.
+          String? name;
+          String? priority;
+          String? day;
+          String? timeRange;
+          bool isCompleted = false;
+
+          await showDialog(
+            context: context,
+            builder: (context) {
+              final _formKey = GlobalKey<FormState>();
+              return AlertDialog(
+                title: Text('Add Task'),
+                content: Form(
+                  key: _formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          decoration: InputDecoration(labelText: 'Task Name'),
+                          onSaved: (value) => name = value,
+                          validator: (value) => (value == null || value.isEmpty)
+                              ? 'Enter task name'
+                              : null,
+                        ),
+                        TextFormField(
+                          decoration: InputDecoration(labelText: 'Priority'),
+                          onSaved: (value) => priority = value,
+                          validator: (value) => (value == null || value.isEmpty)
+                              ? 'Enter priority'
+                              : null,
+                        ),
+                        TextFormField(
+                          decoration: InputDecoration(labelText: 'Day'),
+                          onSaved: (value) => day = value,
+                          validator: (value) =>
+                              (value == null || value.isEmpty) ? 'Enter day' : null,
+                        ),
+                        TextFormField(
+                          decoration:
+                              InputDecoration(labelText: 'Time Range (e.g., 9 am - 10 am)'),
+                          onSaved: (value) => timeRange = value,
+                          validator: (value) =>
+                              (value == null || value.isEmpty) ? 'Enter time range' : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    child: Text('Cancel'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  ElevatedButton(
+                    child: Text('Add'),
+                    onPressed: () {
+                      if (_formKey.currentState!.validate()) {
+                        _formKey.currentState!.save();
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+
+          // Only add the task if all required details are provided.
+          if (name != null && priority != null && day != null && timeRange != null) {
+            FirebaseFirestore.instance.collection('tasks').add({
+              'name': name,
+              'priority': priority,
+              'day': day,
+              'timeRange': timeRange,
+              'isCompleted': isCompleted,
+            });
+          }
+        },
+      ),
     );
   }
-}
-
-// Helper model class to represent a time slot and its associated tasks.
-class TimeSlot {
-  String timeRange;
-  List<Task> tasks;
-
-  TimeSlot({required this.timeRange, required this.tasks});
-}
-
-// Helper model class to represent a day's schedule.
-class DaySchedule {
-  String day;
-  List<TimeSlot> timeSlots;
-
-  DaySchedule({required this.day, required this.timeSlots});
 }
